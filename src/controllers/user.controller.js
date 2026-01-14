@@ -132,3 +132,24 @@ exports.getUserStats = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+// Добавь в конец файла
+exports.uploadAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const avatar_url = req.file.path;
+
+    const result = await db.query(
+      "UPDATE users SET avatar_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, username, email, full_name, bio, avatar_url",
+      [avatar_url, req.user.id]
+    );
+
+    res.json({ message: "Avatar uploaded", user: result.rows[0] });
+  } catch (error) {
+    console.error("Upload avatar error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
