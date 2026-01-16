@@ -22,10 +22,17 @@ exports.getUserProfile = async (req, res) => {
 };
 
 // Получить свой профиль
+// Получить свой профиль
 exports.getMyProfile = async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT id, username, email, full_name, bio, avatar_url, is_verified, email_verified, created_at FROM users WHERE id = $1",
+      `SELECT u.id, u.username, u.email, u.full_name, u.bio, u.avatar_url, 
+        u.is_verified, u.email_verified, u.created_at,
+        (SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
+        (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+        (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count
+       FROM users u
+       WHERE u.id = $1`,
       [req.user.id]
     );
 
@@ -35,7 +42,6 @@ exports.getMyProfile = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
-
 // Обновить профиль
 exports.updateProfile = async (req, res) => {
   try {
