@@ -108,6 +108,92 @@ exports.login = async (req, res) => {
   }
 };
 
+// Google OAuth
+exports.googleAuth = async (req, res) => {
+  try {
+    const { email, username, googleId, picture } = req.body;
+
+    // Валидация
+    if (!email || !googleId) {
+      return res.status(400).json({ error: "Email and googleId are required" });
+    }
+
+    // Проверяем существует ли пользователь с таким email
+    let userResult = await db.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+
+    let user;
+
+    if (userResult.rows.length > 0) {
+      // Пользователь существует - обновляем данные если нужно
+      user = userResult.rows[0];
+
+      // Обновляем аватар если его нет, но есть от Google
+      if (!user.avatar_url && picture) {
+        await db.query("UPDATE users SET avatar_url = $1 WHERE id = $2", [
+          picture,
+          user.id,
+        ]);
+        user.avatar_url = picture;
+      }
+    } else {
+      // Создаем нового пользователя
+      // Генерируем уникальный username если не передан
+      let finalUsername = username || email.split("@")[0];
+
+      // Проверяем уникальность username
+      const usernameCheck = await db.query(
+        "SELECT username FROM users WHERE username = $1",
+        [finalUsername]
+      );
+
+      if (usernameCheck.rows.length > 0) {
+        // Добавляем случайные цифры к username
+        finalUsername = `${finalUsername}${Math.floor(Math.random() * 10000)}`;
+      }
+
+      // Создаем пользователя (без пароля, так как OAuth)
+      const createResult = await db.query(
+        `INSERT INTO users (username, email, password, full_name, avatar_url, email_verified) 
+         VALUES ($1, $2, $3, $4, $5, $6) 
+         RETURNING id, username, email, full_name, avatar_url, email_verified, created_at`,
+        [
+          finalUsername,
+          email,
+          "google_oauth_" + googleId, // Храним googleId как "пароль"
+          username || finalUsername,
+          picture || null,
+          true, // Google email уже верифицирован
+        ]
+      );
+
+      user = createResult.rows[0];
+    }
+
+    // Создание токена
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRE,
+    });
+
+    res.json({
+      message: "Google authentication successful",
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        full_name: user.full_name,
+        avatar_url: user.avatar_url,
+        email_verified: user.email_verified,
+      },
+    });
+  } catch (error) {
+    console.error("Google auth error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 // Logout (клиент просто удаляет токен)
 exports.logout = async (req, res) => {
   res.json({ message: "Logged out successfully" });
