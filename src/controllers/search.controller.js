@@ -1,5 +1,3 @@
-const db = require("../config/database");
-
 // Поиск пользователей
 const db = require("../config/database");
 
